@@ -1,0 +1,73 @@
+#!/usr/bin/env python3
+#
+# Copyright 2018 Google LLC
+#
+# Use of this source code is governed by an MIT-style
+# license that can be found in the LICENSE file or at
+# https://opensource.org/licenses/MIT.
+
+import argparse
+import pathlib
+
+import cipherlist
+import hexjson
+import tvgen
+import writers.cstruct
+
+_file = pathlib.Path(__file__).resolve()
+
+
+def write(args, cipher):
+    tvgen.write_tests(args, cipher)
+
+
+def check(args, cipher):
+    for v in cipher.variants():
+        cipher.variant = v
+        for r in cipher.external_testvectors(args.test_vectors):
+            tvgen.check_testvector(cipher, r, args.verbose)
+        tvgen.check_tests(args, cipher)
+
+
+def print_external(args, cipher):
+    for v in cipher.variants():
+        cipher.variant = v
+        hexjson.dump_using_hex(cipher.external_testvectors(args.test_vectors))
+
+
+def convert_cstruct(args, cipher):
+    writers.cstruct.convert(args.test_vectors, cipher)
+
+
+def convert_linux(args, cipher):
+    writers.cstruct.convert_linux(args.test_vectors, cipher)
+
+
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--test-vectors', type=pathlib.Path,
+                        default=_file.parent.parent / "test_vectors")
+    parser.add_argument('--verbose', action='store_true')
+    parser.add_argument('--cipher', action='append')
+    subparsers = parser.add_subparsers(required=True, dest='subcommand')
+    subparsers.add_parser('write').set_defaults(func=write)
+    subparsers.add_parser('check').set_defaults(func=check)
+    subparsers.add_parser('print').set_defaults(func=print_external)
+    subparsers.add_parser('convert_cstruct').set_defaults(func=convert_cstruct)
+    subparsers.add_parser('convert_linux').set_defaults(func=convert_linux)
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    if args.cipher is None:
+        ciphers = cipherlist.ciphers
+    else:
+        ciphers = [cipherlist.lookup_cipher(c) for c in args.cipher]
+    for cipher in ciphers:
+        print(f"======== {cipher.name().lower()} ========")
+        args.func(args, cipher)
+
+
+if __name__ == "__main__":
+    main()
